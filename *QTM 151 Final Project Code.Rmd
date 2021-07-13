@@ -1,0 +1,160 @@
+---
+title: "QTM151 Final Project Code"
+author: "Connor Parrish, Simran Mallik, Nikhil Bapat, Niki Vasan, Cassie Srb"
+date: "12/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(convertr)
+library(tools)
+library(USAboundaries)
+library(usdata)
+library(plotly)
+library(forcats)
+library(usmap)
+library(ggplot2)
+library(dplyr)
+
+
+death_count <- read.csv("Provisional_COVID-19_Death_Counts_by_Sex__Age__and_State.csv")
+conditions <- read.csv("Conditions_contributing_to_deaths_involving_coronavirus_disease_2019_COVID-19__by_age_group_and_state_United_States.csv")
+```
+
+**Death by Age w/ Controls for Sex**
+```{r}
+
+
+ages <- c('Under 1 year', '1-4 years', '5-14 years', '15-24 years', '25-34 years',
+          '35-44 years', '45-54 years', '55-64 years', '65-74 years', '75-84 years',
+          '85 years and over')
+
+result <- death_count %>%
+  filter(Sex == 'Male'|Sex == 'Female') %>%
+  filter(Age.group %in% ages) %>%
+  filter(State == 'United States') %>%
+  filter(!is.na(COVID.19.Deaths)) %>%
+  mutate(age = fct_collapse(Age.group,
+        '0-34' = c('Under 1 year', '1-4 years', '5-14 years', '15-24 years', '25-34 years'),
+        '35-54' = c('35-44 years', '45-54 years'),
+        '55-74' = c('55-64 years', '65-74 years'),
+        '75-85+' = c('75-84 years', '85 years and over')))%>%
+  select(Sex, age, COVID.19.Deaths) %>%
+  group_by(age, Sex) %>%
+  summarise(Covid_Deaths = sum(COVID.19.Deaths))
+
+
+ggplotly(ggplot(result, aes(fill= Sex, x=age, y=Covid_Deaths)) + 
+           geom_bar(position="stack", stat="identity") + labs(title = "COVID-19 Deaths by Age and Sex", y = "Number of Covid Deaths", x = "Age Group") + theme(plot.title = element_text(hjust = 0.5)))
+
+```
+Insights:
+
+-COVID-19 deaths become progressively more common in higher age brackets
+-Over 50% of deaths are patients 75 years of age or older
+-Ages 0-34 contain the lowest number of COVID deaths by far, making up less than 1%
+-In the 3 younger age brackets, male deaths are about 2 times as common as female deaths
+-In the highest age bracket, the numbers are more even, with slightly more female deaths than male deaths
+
+**Pre-Existing Health Conditions**
+``` {r}
+
+conditions1<-conditions
+conditions1$Condition.Group<-as.factor(conditions1$Condition.Group)
+
+conditions1%>%
+  filter(Condition.Group!="All other conditions and causes (residual)", Condition.Group!="COVID-19")%>%
+  group_by(Condition.Group)%>%
+  summarise(deaths=sum(Number.of.COVID.19.Deaths,na.rm=T))%>%
+  mutate(Condition.Group=fct_reorder(Condition.Group,deaths,.desc=T))%>%
+  plot_ly(x=~Condition.Group,y=~deaths,type="bar",color=~Condition.Group)%>%
+  layout(title="COVID-19 Deaths by Pre-Existing Health Condition Group",xaxis=list(title="Pre-Existing Health Condition"),yaxis=list(title="Total Deaths"))
+
+```
+Insights:
+
+-Of the diseases studied, underlying respiratory and circulatory diseases by far have the highest rate of complication and death.
+-Those with underlying respiratory diseases are at greatest risk of death from COVID-19
+-Overall, underlying circulatory diseases account for about 2/3 as many COVID-19 deaths as respiratory diseases. 
+-Those with a respiratory or circulatory disease should be especially careful and take the proper precautions of social distancing, mask wearing, and hygiene. 
+
+**US MAP**
+```{r}
+death_count$State <- as.character(death_count$State)
+
+provisional_death_count <- death_count %>%
+  select(State, Sex, Age.group, COVID.19.Deaths, Total.Deaths) %>%
+    filter(Age.group == "All Ages",
+           Sex == "All Sexes",
+           !(State == "United States"),
+             !(State == "Puerto Rico"),
+             !(State == "District of Columbia"),
+              !(State == "New York")) %>%
+ mutate(State = case_when(
+                      str_detect(State, "^New York") ~ "New York",
+                          TRUE ~ State),
+        percent_covid = COVID.19.Deaths/Total.Deaths * 100
+         ) 
+
+states <- map_data("state")
+provisional_death_count$State <- tolower(provisional_death_count$State)
+snames <- aggregate(cbind(long, lat) ~ region, data=states, FUN=mean)
+snames <- as.data.frame(snames)
+snames$region <- toTitleCase(snames$region)
+snames$region <- sapply(snames$region, state2abbr)
+
+map_data <- left_join(provisional_death_count, states, by = c("State" = "region"))
+
+
+subset <- subset(map_data, select = c(State, percent_covid))
+subset$State <- sapply(subset$State, state2abbr)
+colnames(subset) <- c("state", "percent_covid")
+
+us_map <- usmap::us_map()
+map2 <- usmap::plot_usmap(data = subset, values = "percent_covid", labels = T)+ labs(fill = 'Percent Covid 2020') + scale_fill_gradient(low = "#FBFCFE", high = "#000DFB", na.value="grey90", guide = guide_colorbar(barwidth = 25, barheight = 0.4, title.position = "top")) + theme(legend.position = "bottom", legend.title=element_text(size=12), legend.text=element_text(size=10))
+
+map2
+```
+Insights:
+
+New York had close to 30%, wheras a neighboring state, New Hampshire, had close to 1%. Because there is greater variation in the northeastern states, we decided to subset these states and conduct further analysis below.
+
+
+**COVID-19 Deaths Associated with Circulatory and Respiratory Diseases for Ages 55-74**
+```{r}
+
+
+new_states_conditions <- conditions %>%
+  drop_na() %>%
+  mutate(age = fct_collapse(Age.Group,
+               "0-34" = c("0-24", "25-34"), 
+               "35-54" = c("35-44", "45-54"),
+               "55-74" = c("55-64", "65-74"),
+               "74-85+" = c("75-84", "85+"))) %>%
+  filter(Condition.Group == "Respiratory diseases" | Condition.Group == "Circulatory diseases", age == "55-74", State == "ME" |State == "VT"|State == "MA"| State == "CT"|State == "RI"| State == "NJ" | State == "NY"| State == "PA"| State == "DE"| State == "MD" |State == "NH") %>%
+  group_by(State, Condition.Group) %>%
+  summarise(covid_deaths = sum(Number.of.COVID.19.Deaths))
+
+
+l <- list(
+  font = list(
+    family = "sans-serif",
+    size = 12,
+    color = "#000",
+    title=list(text="<b> Condition Group </b>")),
+  bgcolor = "#E2E2E2",
+  bordercolor = "#FFFFFF",
+  borderwidth = 2)
+
+new_states_conditions$State <- sapply(new_states_conditions$State, abbr2state)
+plot_ly(data = new_states_conditions, x=~State, y=~covid_deaths, type = "bar", color =~Condition.Group, text =~ covid_deaths, textposition = "outside") %>%
+  layout(title = "COVID-19 Deaths Associated with Circulatory and Respiratory Diseases for Ages 55-74", yaxis = list(title = "Deaths"), legend=l) 
+
+```
+
+Insights: 
+
+  We are comparing the number of COVID-19 deaths associated with circulatory diseases compared to those associated with respiratory diseases for northeastern states for individuals in the 55-74 and 74-85+ age group. We chose this age group since it includes those that are middle aged and seniors, which is a population that is more vulnerable to complications and death from COVID-19. We are focusing on circulatory and respiratory diseases since these diseases greatly harm the immune system and are associated with deaths from COVID-19.   
+  All the northeastern states except for Delaware and New Hampshire experience a greater number of COVID-19 deaths associated with circulatory disease than deaths associated with respiratory disease for this age group, with the minimum difference in deaths being 2. 
+  Delaware experienced 7 more respiratory diseases than circulatory diseases, and New Hampshire experienced no circulatory disease-associated deaths. However, these states may be outliers since 9 out of the 11 states experienced more circulatory disease-associated deaths than respiratory diesase-associated deaths. It is possible that individuals in the age range of 55-74 or 75-85+who have a type of circulatory disease may be more prone to complications and death from COVID-19 than those with a respiratory disease, although individuals in both groups in this age range are at a high risk because of their age and an additional pre-existing condition of either circulatory or respiratory disease, and should take precaution through social distancing, mask wearing, and uptake in hygiene to prevent contracting COVID-19.   
