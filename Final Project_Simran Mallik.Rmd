@@ -1,0 +1,180 @@
+---
+title: "Final Project QTM 150"
+author: "Simran Mallik"
+date: "4/25/2020"
+output: html_document
+---
+```{r}
+airbnb <- read.csv("AIRBnB_NYC.csv")
+head(airbnb)
+names(airbnb)
+
+library("dplyr")
+library(ggplot2)
+library(ggthemes)
+```
+
+```{r}
+#1.
+
+#a. I chose the AIRBnb_NYC.csv dataset
+#b. My response variable (variable of interest) is price
+#c. 3 other variables related to price
+  # Categorical: room_type
+  # Categorical: neighbourhood
+  # Numerical: number_of_reviews
+
+levels(airbnb$room_type)
+#d.More specifically, how do you expect your response variable (the outcome) would be related to your explanatory variables (predictors)? 
+
+#Room type is clearly related to the price since an Entire home/apt will be worth more than a private room which will be worth more than a shared room, so to account for this I filtered the dataset by room type to look at only private rooms for this analysis. 
+#I examined the top 10 neighbourhood with the most number of observations (airbnb rentals) and identified these neighbourhoods by using the summary function. Out of these 10 neighbourhoods, I expect that certain neighbourhoods will display a greater number of high priced airbnb's and other neighbourhoods will display a lower number of high priced airbnb's.
+#I expect that there will be higher number of reviews for lower priced airbnb's. Essentially, I expect that the number of airbnb reviews will be negatively correlated with price.
+
+
+#e. Provide a rationale for your expectation (i.e., why?)
+
+#Regarding room type: I used this variable to look at only private rooms so that comparisons amongst the neighbourhoods and in regard to price would be fair and that any relationship between neighbourhoods, number of reviews, and price would not be muddled by the the different room types. 
+
+#Regarding neighbourhood: There are tens of different neighbourhoods in NYC and these neighbourhoods will be different in nature. For example, the class of the people that inhabit these neighbourhoods will most likely affect the price of airbnb rentals. The number of shops/restaurants/attractions in these neighbourhoods can also have an effect on price. For these reasons, I believe that airbnbs in certain neighborhoods will display a greater number of high priced airbnb's and other neighbourhoods will display a lower number of high priced airbnb's. 
+
+
+#Regarding number of reviews: I expect that a higher number of reviews will be correlated with a lower price, and this is because there will be more people that will rent out cheaper airbnb's and fewer people that will rent out more expensive airbnb's. This means that because there will be more people renting out cheaper airbnb's, then it is more likely that there will be more reviews for cheaper airbnb's and fewer reviews for more expensive airbnb's.
+```
+```{r}
+#CLEANING OUT THE CODE:
+
+#First, I need to remove OUTLIERS for price AND number of reviews from the airbnb dataset
+summary(airbnb$price)
+summary(airbnb$number_of_reviews)
+#Looking at the distribution of number of reviews, I can see that almost of the airbnb's have less than 300 reviews. Those that have more can be considered outliers. 
+hist(airbnb$number_of_reviews)
+hist(airbnb$number_of_reviews, breaks= 7)
+summary(airbnb$number_of_reviews)
+#Looking at the distribution of price, I can see that almost of the airbnb's have a price less than $2,000. Those that are worth more can be considered outliers. 
+hist(airbnb$price)
+summary(airbnb$price)
+
+airbnbn <- 
+  airbnb%>%
+  filter(price < 2000, number_of_reviews < 300)
+
+summary(airbnbn)
+
+#My new dataset I will be working with is airbnbn.
+
+```
+```{r}
+
+#2a. Produce an output that answers your research question. In doing so, be sure to use filter, group_by, and summarise. 
+
+#note to self: room_type (categorical), number_of_reviews (integer), and price (integer)
+
+summary(airbnbn$room_type)
+
+neighb_numreviews_price <- 
+  airbnbn%>%
+  filter(neighbourhood == "Williamsburg" | neighbourhood == "Bedford-Stuyvesant" | neighbourhood == "Harlem" | neighbourhood == "Bushwick" | neighbourhood == "Upper West Side" | neighbourhood == "Hell's Kitchen" | neighbourhood == "East Village" | neighbourhood == "Upper East Side" | neighbourhood == "Crown Heights" | neighbourhood == "Midtown")%>%
+  filter(room_type == "Private room")%>% 
+  group_by(neighbourhood)%>%
+  summarise(Number_of_reviews = median(number_of_reviews,na.rm = T), Price = median(price, na.rm = T))
+
+neighb_numreviews_price
+
+summary(airbnbn$number_of_reviews)
+```
+```{r}
+#2b
+#Produce an appropriate graph that visualizes the output produced in 2a. Make sure all of your variables (at least 3) are correctly displayed in the graph.
+names(airbnbn)
+summary(airbnbn$neighbourhood)
+
+#I am using private_room_neighbourhood as the dataset for my graph. However, I am not using the summarise function since I would only get a small number of datapoints. Instead, I am plotting all observations in each neighbourhood to have a better likelihood of potentially observing a trend.
+private_room_neighbourhood<- 
+  airbnbn%>%
+  filter(neighbourhood == "Williamsburg" | neighbourhood == "Bedford-Stuyvesant" | neighbourhood == "Harlem" | neighbourhood == "Bushwick" | neighbourhood == "Upper West Side" | neighbourhood == "Hell's Kitchen" | neighbourhood == "East Village" | neighbourhood == "Upper East Side" | neighbourhood == "Crown Heights" | neighbourhood == "Midtown")%>%
+  filter(room_type == "Private room")%>% 
+  group_by(neighbourhood)
+
+private_room_neighbourhood
+
+
+#Organizing the neighbourhoods into levels (from neighbourhood with most observations to neighbourhood with least observations) so that my graph will facet_wrap by these levels, instead of alphabetical order like in the default way
+private_room_neighbourhood$neighbourhoodn <- factor(private_room_neighbourhood$neighbourhood, levels = c("Williamsburg", "Bedford-Stuyvesant","Harlem","Bushwick", "Upper West Side","Hell's Kitchen","East Village","Upper East Side","Crown Heights","Midtown"))
+  
+
+#NOTE: I put a color gradient for price just to make the graph easier to understand. The color gradient does not represent another extra variable. My variables I used in this graph were the number of reviews, price, and neigbhourhood. The graph only displays information for private rooms.
+ggplot(private_room_neighbourhood, aes(number_of_reviews, price)) + geom_point(aes(color = price)) + facet_wrap(~neighbourhoodn) + scale_color_gradient(name = "Price", low = "darkblue", high="orange") + labs(x = "Number of Reviews", y = "Price", title = "Price vs Number of Reviews for Private Rooms")
+
+```
+
+```{r}
+#2c.Describe your graph in plain English. How does this graph help you answer your research question?
+
+
+#The graph shows me the number of reviews on the x axis and the price on the y axis for all private rooms (excluding outliers) in the top 10 neighbourhoods with the most airbnb rentals (listed in order from neighbourhood with the most observations to the neighbourhood with the least number of observations). 
+
+#It appears that the scatterplots of the neighbourhoods are very similar. It does not seem that there are any couple of neighbourhoods with significantly more airbnb's of higher prices or more airbnb's with lower prices. However, it can be seen that as one looks from left to right on the graph, from the neighbourhood w/ the most airbnb rentals to the least, the number of airbnb's with higher number of reviews appears to decrease. 
+
+#There is one neighbourhood, Midtown, which appears to have the most number of airbnb's of prices higher than $500 out of all the neighbourhoods.The number of reviews for these high priced Midtown airbnb's are low. In addition, it does look like that in all the neighbourhoods, the airbnb's with prices on the higher end (above $500) have a much smaller number of reviews.  
+#However, it is important to note that though there are airbnb's with high prices (above $500) that have a small number of reviews, there are many airbnb's with low prices that have the same number of reviews as these high priced airbnb's. 
+#In addition, it is observable for example that there are airbnbn's with 100 reviews that have the same price as airbnb's with 300 reviews in each neighbourhood. 
+#Therefore, I cannot see any important trend and cannot conclude that number of reviews is negatively correlated with price for all the neighbourhoods.
+```
+
+
+
+
+```{r}
+#3a. 
+#Now that you have answered your original research question, choose another variable from the same data set that you can add to the summary/graph. In other words, what else can you do to answer your question more specifically?
+
+#I am choosing availabilty_365 as my other variable. 
+#I hypothesize that availability is greater for higher priced airbnb's, and availability is lower for lower priced airbnb's. 
+#I hypothesize this since there would be a fewer number of people willing to pay for higher priced airbnb's, and a greater number of people willing to pay for lower priced airbnb's. 
+
+```
+```{r}
+#3b.  Produce another summary and graph using all of the variables, including the new variable. 
+
+#SUMMARY:
+neighb_numreviews_price_avail <- 
+  airbnbn%>%
+  filter(neighbourhood == "Williamsburg" | neighbourhood == "Bedford-Stuyvesant" | neighbourhood == "Harlem" | neighbourhood == "Bushwick" | neighbourhood == "Upper West Side" | neighbourhood == "Hell's Kitchen" | neighbourhood == "East Village" | neighbourhood == "Upper East Side" | neighbourhood == "Crown Heights" | neighbourhood == "Midtown")%>%
+  filter(room_type == "Private room")%>% 
+  group_by(neighbourhood)%>%
+  summarise(Number_of_reviews = median(number_of_reviews,na.rm = T), Price = median(price, na.rm = T), availability = median(availability_365))
+  
+neighb_numreviews_price_avail 
+
+#GRAPH
+
+#For my graph, I am looking at the availability for Upper East Side and Midtown because they are similar in terms of their variability in the data. I did not choose to look at every neighbourhood since it would become repetitive.  
+
+
+private_room_two_neighbourhoods <- 
+  airbnbn%>%
+  filter(neighbourhood == "Upper East Side" |neighbourhood == "Midtown")%>%
+  filter(room_type == "Private room")%>% 
+  group_by(neighbourhood)
+  
+
+private_room_two_neighbourhoods 
+
+private_room_two_neighbourhoods$neighbourhoodn <- factor(private_room_two_neighbourhoods$neighbourhood, levels = c("Upper East Side","Midtown"))
+
+ggplot(private_room_two_neighbourhoods , aes(number_of_reviews, price)) + geom_point(aes(color = availability_365)) + facet_wrap(~neighbourhoodn) + scale_color_gradient(name = "availability", low = "darkblue", high="orange") + labs(x = "Number of Reviews", y = "price", title = "Price vs Number of Reviews for Private Rooms")
+
+```
+```{r}
+#3c
+#It seems that for Midtown, a trend is observable: with a few exceptions, airbnb's with a higher availability and lower number of reviews tend to have a higher price. 
+#For Upper East Side, it seems that many of the airbnb's with low availability and low number of reviews have a lower price (less than 500). I cannot see the same trend observed in Midtown to a significant degree in Upper East Side, and vice versa. 
+#In addition, since Upper East Side and Midtown are just two neighbourhood, one would need to be careful in drawing any absolute conclusions between the relationship amongst these three variables.
+#It would have most likely been better to observe the relationship between rating and price but rating information is not available in the dataset, and many of the other dataset variables include variables such as "name", "host_id","latitude", and"longitude" which would most likely not have have shown any relationship with price. Therefore, I chose number of reviews and availability as the best explanatory variables for price.
+```
+
+
+
+
+
